@@ -11,13 +11,11 @@ package org.openmrs.api;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.format.DateTimeFormatter;
+import java.io.UncheckedIOException;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
-import org.openmrs.api.storage.ObjectMetadata;
 import org.openmrs.api.stream.StreamDataWriter;
-import org.springframework.stereotype.Service;
+import org.openmrs.api.storage.ObjectMetadata;
 
 /**
  * Storage service to persist data that does not fit well in DB.
@@ -27,7 +25,7 @@ import org.springframework.stereotype.Service;
  * {@link ObjectMetadata} can be passed in save methods. It is implementation dependent on how the metadata is 
  * used or persisted.
  * 
- * @since 2.8.0, 2.7.4, 2.6.16, 2.5.15
+ * @since 2.8.0, 2.7.5, 2.6.16, 2.5.15
  */
 public interface StorageService extends OpenmrsService {
 
@@ -171,6 +169,7 @@ public interface StorageService extends OpenmrsService {
 	 * 
 	 * @param key unique key
 	 * @return true if exists
+	 * @throws UncheckedIOException IO error
 	 */
-	boolean exists(String key);
+	boolean exists(String key) throws UncheckedIOException;
 }

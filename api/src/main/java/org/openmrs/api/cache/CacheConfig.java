@@ -22,15 +22,23 @@ import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.text.CaseUtils;
+import org.infinispan.commons.configuration.io.ConfigurationResourceResolver;
+import org.infinispan.commons.configuration.io.URLConfigurationResourceResolver;
 import org.infinispan.commons.dataconversion.MediaType;
 import org.infinispan.configuration.parsing.ConfigurationBuilderHolder;
 import org.infinispan.configuration.parsing.ParserRegistry;
 import org.infinispan.manager.DefaultCacheManager;
+import org.infinispan.remoting.transport.jgroups.JGroupsTransport;
 import org.infinispan.spring.embedded.provider.SpringEmbeddedCacheManager;
+import org.jgroups.JChannel;
+import org.jgroups.protocols.TCP;
+import org.jgroups.protocols.TP;
+import org.jgroups.protocols.TUNNEL;
+import org.jgroups.protocols.UDP;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -61,9 +69,17 @@ public class CacheConfig {
 	
 	@Value("${cache.config:}")
 	private String cacheConfig;
+	
+	@Value("${cache.stack:}")
+	private String cacheStack;
+	
+	@Value("${cache.api.bind.port:}")
+	private String apiCacheBindPort;
+	
+	private String jChannelConfig;
 
 	@Bean(name = "apiCacheManager")
-	public SpringEmbeddedCacheManager apiCacheManager() throws IOException {
+	public CacheManager apiCacheManager() throws Exception {
 		if (StringUtils.isBlank(cacheConfig)) {
 			String local = "local".equalsIgnoreCase(cacheType.trim()) ? "-local" : "";
 			cacheConfig = "infinispan-api" + local + ".xml";
@@ -71,7 +87,27 @@ public class CacheConfig {
 
 		ParserRegistry parser = new ParserRegistry();
 		ConfigurationBuilderHolder baseConfigBuilder = parser.parseFile(cacheConfig);
-
+		if(cacheType.trim().equals("cluster")) {
+			jChannelConfig = getJChannelConfig(cacheStack);
+			JChannel jchannel = new JChannel(jChannelConfig);
+			Class<? extends TP> protocolClass = TCP.class;
+			if (cacheStack.trim().isEmpty() || cacheStack.trim().equals("udp")) {
+				protocolClass = UDP.class;
+			} else if(cacheStack.trim().equals("tunnel")) {
+				protocolClass = TUNNEL.class;
+			}
+			TP protocol = jchannel.getProtocolStack().findProtocol(protocolClass);
+			if (StringUtils.isBlank(apiCacheBindPort)) {
+				String hibernateCacheBindPort = System.getProperty("jgroups.bind.port");
+				if (hibernateCacheBindPort == null) {
+					hibernateCacheBindPort = "7800";
+				}
+				apiCacheBindPort = String.valueOf(Integer.parseInt(hibernateCacheBindPort) + 1);
+			}
+			protocol.setBindPort(Integer.parseInt(apiCacheBindPort));
+			JGroupsTransport transport = new JGroupsTransport(jchannel);
+			baseConfigBuilder.getGlobalConfigurationBuilder().transport().clusterName("infinispan-api-cluster").transport(transport);
+		}
 		// Determine cache type based on loaded template for "entity"
 		String cacheType = baseConfigBuilder.getNamedConfigurationBuilders().get("entity").build().elementName();
 		cacheType = StringUtils.removeEnd(cacheType, "-configuration");
@@ -88,10 +124,10 @@ public class CacheConfig {
 			// Skip already defined caches.
 			InputStream fullConfig = buildFullConfig(yaml, configFile,
 				baseConfigBuilder.getNamedConfigurationBuilders().keySet(), cacheType);
-			parser.parse(fullConfig, baseConfigBuilder, null,
+			parser.parse(fullConfig, baseConfigBuilder, ConfigurationResourceResolver.DEFAULT,
 				MediaType.APPLICATION_YAML);
 		}
-		
+
 		DefaultCacheManager cacheManager = new DefaultCacheManager(baseConfigBuilder, true);
 		return new SpringEmbeddedCacheManager(cacheManager);
 	}
@@ -153,4 +189,30 @@ public class CacheConfig {
 		return files;
 	}
 	
+	public String getJChannelConfig(String cacheStack) {
+		String jChannelConfig;
+		switch (cacheStack.trim()) {
+			case "tcp":
+				jChannelConfig = "default-configs/default-jgroups-tcp.xml";
+				break;
+			case "kubernetes":
+				jChannelConfig = "default-configs/default-jgroups-kubernetes.xml";
+				break;
+			case "google":
+				jChannelConfig = "default-configs/default-jgroups-google.xml";
+				break;
+			case "tunnel":
+				jChannelConfig = "default-configs/default-jgroups-tunnel.xml";
+				break;
+			case "ec2":
+				jChannelConfig = "default-configs/default-jgroups-ec2.xml";
+				break;
+			case "azure":
+				jChannelConfig = "default-configs/default-jgroups-azure.xml";
+				break;
+			default:
+				jChannelConfig = "default-configs/default-jgroups-udp.xml";
+		}
+		return jChannelConfig;
+	}
 }
