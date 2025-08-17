@@ -22,7 +22,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.JoinColumn;
 
 import org.codehaus.jackson.annotate.JsonIgnore;
-import org.hibernate.envers.Audited;
+
 
 
 /**
@@ -33,7 +33,6 @@ import org.hibernate.envers.Audited;
  * @see org.openmrs.Form
  * @see org.openmrs.Field
  */
-@Audited
 @Entity
 @Table(name = "form_field")
 public class FormField extends BaseChangeableOpenmrsMetadata implements java.io.Serializable, Comparable<FormField> {
