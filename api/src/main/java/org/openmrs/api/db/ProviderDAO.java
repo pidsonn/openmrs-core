@@ -141,5 +141,14 @@ public interface ProviderDAO {
 	 * @see ProviderService#getProviderRoleByUuid(String) 
 	 */	
 	ProviderRole getProviderRoleByUuid(String uuid);
-	
+
+	/**
+	 * @see ProviderService#getProvidersByRoles(List) 
+	 */
+	List<Provider> getProvidersByRoles(List<ProviderRole> roles, boolean includeRetired);
+
+	/**
+	 * @see ProviderService#getAllProviderRoles(boolean)
+	 */
+	List<ProviderRole> getAllProviderRoles(boolean includeRetired);
 }
